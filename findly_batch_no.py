@@ -13,6 +13,7 @@ import json
 import time
 import Queue
 import math
+import zipfile
 import requests
 import threading
 import traceback
@@ -28,6 +29,8 @@ class FuploadHelper(object):
         self.conf = Configuration()
         self.user_id = self.login()
         self.flag = False
+        #self.total = 0
+        self.total = 1
 
     def login(self):
         data = dict(
@@ -89,54 +92,112 @@ class FuploadHelper(object):
             # 第四步 多线程实现文件上传
             # 创建文件夹
             for i in range(5):
-                th = threading.Thread(target=self.send_file, args=(queue, remotepath, user_id, ds_id, tb_id, schema, separator, null_holder))
+                th = threading.Thread(target=self.send_file, args=(queue, remotepath))
                 thread.append(th)
             for t in thread:
                 t.setDaemon(True)
                 t.start()
             for t in thread:
                 t.join()
-            self.check()
+            cres =  self.check(ds_id, tb_id)
+            if cres:
+                error_bag = {
+                        'user_id':user_id,
+                        'ds_id':ds_id,
+                        'tb_id':tb_id,
+                        'err':cres,
+                        'schema':schema,
+                        'separator':separator,
+                        'null_holder':null_holder
+                        }
+                with open('%s/err.log' % sub_path , 'wb') as  fo:
+                    fo.write('%s' % json.dumps(error_bag))
+                print '文件发送失败:%s' % json.dumps(cres)
+                continue
+            else:
+                task_id = self.merge(user_id, ds_id, tb_id, schema, separator, null_holder)
+                print '生成任务task_id:%s' % str(task_id)
         return True
+
+    def merge(self, user_id, ds_id, tb_id, schema, separator, null_holder):
+        bag = dict(
+                user_id=user_id,
+                ds_id=ds_id,
+                tb_id=tb_id,
+                total=self.total,
+                schema=json.dumps(schema),
+                separator=separator,
+                null_holder=null_holder
+                )
+        ezio_merge = self.conf.get('server', 'Ezio') + '/new/merge'
+        res = requests.post(ezio_merge, bag)
+        res = json.loads(res.content)
+        task_id = res['result']
+        return task_id
+
+
+    def check(self, ds_id, tb_id):
+        bag = dict(
+                ds_id=ds_id,
+                tb_id=tb_id,
+                total=self.total
+                )
+        ezio_check = self.conf.get('server', 'Ezio') + '/new/check'
+        res = requests.post(ezio_check, bag)
+        res = json.loads(res.content)['result']
+        return res
 
     def split_file(self, queue, sub_path, chunksize):
         res = os.listdir(sub_path)
+        zipname = os.path.join(sub_path, 'all.zip')
+        # 过滤压缩无关文件
         if "schema.info" in res:
             res.remove('schema.info')
         if "err.log" in res:
             res.remove('err.log')
+        if "all.zip" in res:
+            res.remove('all.zip')
+            os.remove(zipname)
+        # 压缩该文件下所有需要上传的文件
+        f = zipfile.ZipFile(zipname,'w',zipfile.ZIP_DEFLATED)
         for fname in res:
             fromfile = os.path.join(sub_path, fname)
-            size = os.path.getsize(fromfile)
-            total = int(math.ceil(float(size)/chunksize))
-            md5sum = os.popen('md5 %s' % fromfile).read()
-            md5 = md5sum.split('= ')[1].split('\n')[0]
+            if os.path.isdir(fromfile):
+                continue
+            f.write(fromfile)
+        f.close()
 
-            partnum = 0
-            input = open(fromfile, 'rb')
-            while 1:
-                chunk = input.read(chunksize)
-                if not chunk:
-                    break
-                partnum += 1
-                bag = {}
-                bag['fname'] = fname
-                bag['partnum'] = partnum
-                bag['total'] = total
-                bag['size'] = size
-                bag['data'] = chunk
-                bag['md5'] = md5
-                queue.put(bag)
+        size = os.path.getsize(zipname)
+        total = int(math.ceil(float(size)/chunksize))
+        self.total = total
+        md5sum = os.popen('md5 %s' % fromfile).read()
+        md5 = md5sum.split('= ')[1].split('\n')[0]
+        partnum = 0
+        input = open(zipname, 'rb')
+        while 1:
+            chunk = input.read(chunksize)
+            if not chunk:
+                break
+            partnum += 1
+            bag = {}
+            bag['fname'] = 'all.zip'
+            bag['partnum'] = partnum
+            bag['total'] = total
+            bag['size'] = size
+            bag['das'] = chunk
+            bag['md5'] = md5
+            queue.put(bag)
+
         while True:
             if queue.qsize() == 0:
                 self.flag = True
                 break
             else:
                 time.sleep(5)
-        return
+        return True
 
-    def send_file(self, queue, remotepath, user_id, ds_id, tb_id, schema, separator, null_holder):
-        ezio_upload  = Configuration().get('server', 'Ezio') + '/api/newupload'
+    def send_file(self, queue, remotepath):
+        ezio_upload  = Configuration().get('server', 'Ezio') + '/new/upload'
         while True:
             info = None
             try:
@@ -148,12 +209,6 @@ class FuploadHelper(object):
                     time.sleep(1)
             if info:
                 info['path'] = remotepath
-                info['user_id'] = user_id
-                info['ds_id'] = ds_id
-                info['tb_id'] = tb_id
-                info['schema'] = json.dumps(schema)
-                info['separator'] = separator
-                info['null_holder'] = null_holder
                 res = requests.post(ezio_upload, data=info)
         return True
 
@@ -208,9 +263,16 @@ if __name__=='__main__':
     username = "jiaoguofu"
     password = "jiao1993"
     local_path = "/Users/jiaoguofu/Desktop/fsplit"
+    user_id = '319d170b76123c08e7bca229958e0d3f'
     import datetime
     print datetime.datetime.today()
+    ds_id = 'ds_e4a2087b021d41ee8dbe4c26e9ae7107'
+    tb_id = 'tb_74ac5b338d78420c9ac9d950bedab9f7'
+    separator = ','
+    null_holder = 'null'
+    schema = [{"type": 2, "name": "field1", "title": "field1"}, {"type": 2, "name": "field2", "title": "field2"}, {"type": 2, "name": "field3", "title": "field3"}, {"type": 2, "name": "field4", "title": "field4"}, {"type": 2, "name": "field5", "title": "field5"}, {"type": 2, "name": "field6", "title": "field6"}, {"type": 2, "name": "field7", "title": "field7"}, {"type": 2, "name": "field8", "title": "field8"}, {"type": 2, "name": "field9", "title": "field9"}, {"type": 2, "name": "field10", "title": "field10"}]
     FuploadHelper(domain, username, password).do_action(local_path)
+    #print FuploadHelper(domain, username, password).merge(user_id, ds_id, tb_id, schema, separator, null_holder)
     print datetime.datetime.today()
 
 
