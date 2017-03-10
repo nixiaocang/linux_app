@@ -1,0 +1,10 @@
+domain=haizhi
+username=jiaoguofu
+password=jiao1993
+ds_name=焦国富
+tbname=焦国富
+separator=,
+null_holder=null
+path=/Users/jiaoguofu/Desktop/fsplit
+ds_id=ds_d4d535868fea40bba9328fcc3b28dc24
+tb_id=tb_3e8d09dc1ce54e2199cf97f41ea414b8
