@@ -29,8 +29,8 @@ class FuploadHelper(object):
         self.conf = Configuration()
         self.user_id = self.login()
         self.flag = False
-        #self.total = 0
-        self.total = 1
+        self.total = 0
+        #self.total = 1
 
     def login(self):
         data = dict(
@@ -99,6 +99,7 @@ class FuploadHelper(object):
                 t.start()
             for t in thread:
                 t.join()
+            print '发送完毕 进行校验'
             cres =  self.check(ds_id, tb_id)
             if cres:
                 error_bag = {
@@ -170,7 +171,7 @@ class FuploadHelper(object):
         size = os.path.getsize(zipname)
         total = int(math.ceil(float(size)/chunksize))
         self.total = total
-        md5sum = os.popen('md5 %s' % fromfile).read()
+        md5sum = os.popen('md5 %s' % zipname).read()
         md5 = md5sum.split('= ')[1].split('\n')[0]
         partnum = 0
         input = open(zipname, 'rb')
@@ -258,21 +259,113 @@ class FuploadHelper(object):
                     tbs.append(bag)
         return ds_name, tbs
 
+    def retry(self, path):
+        res = os.listdir(path)
+        retry_list = []
+        for item in res:
+            sub_path = os.path.join(path, item)
+            if os.path.isdir(sub_path):
+                sub_res = os.listdir(sub_path)
+                if 'schema.info' not in sub_res:
+                    continue
+                if 'err.log' not in sub_res:
+                    continue
+                if "all.zip" not in sub_res:
+                    continue
+                retry_list.append(sub_path)
+
+        for sub_path in retry_list:
+            err_log = os.path.join(sub_path, 'err.log')
+            fo = open(err_log, 'rb').readlines()
+            bag = {}
+            for line in fo:
+                temp = line.split('\n')[0]
+                bag = json.loads(temp)
+                break
+            user_id = bag['user_id']
+            ds_id = bag['ds_id']
+            tb_id = bag['tb_id']
+            err = bag['err']
+            schema = bag['schema']
+            separator = bag['separator']
+            null_holder = bag['null_holder']
+            chunksize = 5*1024*1024
+            thread = []
+            self.flag = False
+            queue = Queue.Queue()
+            remotepath = '/tmp/%s/%s' % (ds_id, tb_id)
+            
+            th0 = threading.Thread(target=self.retry_split_file, args=(queue, sub_path, chunksize, err))
+            thread.append(th0)
+            for i in range(5):
+                th = threading.Thread(target=self.send_file, args=(queue, remotepath))
+                thread.append(th)
+            for t in thread:
+                t.setDaemon(True)
+                t.start()
+            for t in thread:
+                t.join()
+            print "发送完毕"
+            cres =  self.check(ds_id, tb_id)
+            if cres:
+                error_bag = {
+                        'user_id':user_id,
+                        'ds_id':ds_id,
+                        'tb_id':tb_id,
+                        'err':cres,
+                        'schema':schema,
+                        'separator':separator,
+                        'null_holder':null_holder
+                        }
+                with open('%s/err.log' % sub_path , 'wb') as  fo:
+                    fo.write('%s' % json.dumps(error_bag))
+                print '文件发送失败:%s' % json.dumps(cres)
+                continue
+            else:
+                task_id = self.merge(user_id, ds_id, tb_id, schema, separator, null_holder)
+                print '生成任务task_id:%s' % str(task_id)
+        return True
+
+    def retry_split_file(self, queue, sub_path, chunksize, err):
+            zipname = os.path.join(sub_path, 'all.zip')
+            size = os.path.getsize(zipname)
+            total = int(math.ceil(float(size)/chunksize))
+            self.total = total
+            md5sum = os.popen('md5 %s' % zipname).read()
+            md5 = md5sum.split('= ')[1].split('\n')[0]
+            partnum = 0
+            input = open(zipname, 'rb')
+            while 1:
+                chunk = input.read(chunksize)
+                if not chunk:
+                    break
+                partnum += 1
+                if partnum in err:
+                    bag = {}
+                    bag['fname'] = 'all.zip'
+                    bag['partnum'] = partnum
+                    bag['total'] = total
+                    bag['size'] = size
+                    bag['das'] = chunk
+                    bag['md5'] = md5
+                    queue.put(bag)
+            while True:
+                if queue.qsize() == 0:
+                    self.flag = True
+                    break
+                else:
+                    time.sleep(5)
+            return True
+
 if __name__=='__main__':
     domain = "haizhi"
     username = "jiaoguofu"
     password = "jiao1993"
     local_path = "/Users/jiaoguofu/Desktop/fsplit"
-    user_id = '319d170b76123c08e7bca229958e0d3f'
     import datetime
     print datetime.datetime.today()
-    ds_id = 'ds_e4a2087b021d41ee8dbe4c26e9ae7107'
-    tb_id = 'tb_74ac5b338d78420c9ac9d950bedab9f7'
-    separator = ','
-    null_holder = 'null'
-    schema = [{"type": 2, "name": "field1", "title": "field1"}, {"type": 2, "name": "field2", "title": "field2"}, {"type": 2, "name": "field3", "title": "field3"}, {"type": 2, "name": "field4", "title": "field4"}, {"type": 2, "name": "field5", "title": "field5"}, {"type": 2, "name": "field6", "title": "field6"}, {"type": 2, "name": "field7", "title": "field7"}, {"type": 2, "name": "field8", "title": "field8"}, {"type": 2, "name": "field9", "title": "field9"}, {"type": 2, "name": "field10", "title": "field10"}]
-    FuploadHelper(domain, username, password).do_action(local_path)
-    #print FuploadHelper(domain, username, password).merge(user_id, ds_id, tb_id, schema, separator, null_holder)
+    #FuploadHelper(domain, username, password).do_action(local_path)
+    FuploadHelper(domain, username, password).retry(local_path)
     print datetime.datetime.today()
 
 
