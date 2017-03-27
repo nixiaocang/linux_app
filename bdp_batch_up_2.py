@@ -272,7 +272,7 @@ class FuploadHelper2(object):
             if os.path.isdir(sub_path):
                 sub_res = os.listdir(sub_path)
                 if 'schema.info' not in sub_res:
-                    break
+                    continue
                 else:
                     bag = {}
                     separator, null_holder, schema = self.get_schema(sub_path)

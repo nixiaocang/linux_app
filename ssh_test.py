@@ -2,23 +2,6 @@
 # -*- coding:utf-8 -*-
 
 import paramiko
-
-#ssh = paramiko.SSHClient()
-#ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-##ssh.connect("115.28.9.49",22,"root", "Jiao1993")
-#ssh.connect("123.126.105.34",22,"jiaogf", "jiao1993")
-#stdin, stdout, stderr = ssh.exec_command("ls")
-#print stdout.readlines()
-#ssh.close()
-#
-#t = paramiko.Transport("115.28.9.49",22)
-#t.connect(username = "root", password = "Jiao1993")
-#sftp = paramiko.SFTPClient.from_transport(t)
-#remotepath='/root/asd.csv'
-#localpath='/Users/jiaoguofu/Desktop/asd.csv'
-#sftp.put(localpath, remotepath)
-#t.close()
-
 class BdpSftpClient(object):
     def __init__(self, host, port, username, password):
         self.host = host
@@ -63,14 +46,3 @@ if __name__=='__main__':
     stdin, stdout, stderr = bsftp._ssh_fd.exec_command("mkdir -p %s" % '/temp/ds_id/test')
     print stdout.readlines()
     bsftp.close()
-
-
-
-
-
-
-
-
-
-
-

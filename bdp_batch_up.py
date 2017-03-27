@@ -101,7 +101,7 @@ class FuploadHelper(object):
 
             # 第四步 多线程实现文件上传
             # 创建文件夹
-            for i in range(5):
+            for i in range(10):
                 th = threading.Thread(target=self.send_file, args=(queue, remotepath))
                 thread.append(th)
             for t in thread:
@@ -173,7 +173,7 @@ class FuploadHelper(object):
                 res.remove('all.zip')
                 os.remove(zipname)
             # 压缩该文件下所有需要上传的文件
-            f = zipfile.ZipFile(zipname,'w',zipfile.ZIP_DEFLATED)
+            f = zipfile.ZipFile(zipname,'w',zipfile.ZIP_DEFLATED, allowZip64 = True)
             for fname in res:
                 fromfile = os.path.join(sub_path, fname)
                 if os.path.isdir(fromfile):
@@ -183,8 +183,8 @@ class FuploadHelper(object):
         size = os.path.getsize(zipname)
         total = int(math.ceil(float(size)/self.chunksize))
         self.total = total
-        md5sum = os.popen('md5 %s' % zipname).read()
-        md5 = md5sum.split('= ')[1].split('\n')[0]
+        #md5sum = os.popen('md5 %s' % zipname).read()
+        #md5 = md5sum.split('= ')[1].split('\n')[0]
         partnum = 0
         if err is None:
             err = [i+1  for i in range(total)]
@@ -201,7 +201,7 @@ class FuploadHelper(object):
                 bag['total'] = total
                 bag['size'] = size
                 bag['das'] = chunk
-                bag['md5'] = md5
+                #bag['md5'] = md5
                 queue.put(bag)
 
         while True:
@@ -225,7 +225,17 @@ class FuploadHelper(object):
                     time.sleep(1)
             if info:
                 info['path'] = remotepath
-                res = requests.post(ezio_upload, data=info)
+                count = 0
+                while count < 3:
+                    try:
+                        res = requests.post(ezio_upload, data=info)
+                        break
+                    except Exception, e:
+                        print e.message
+                        time.sleep(1)
+                        count += 1
+                        if count == 3:
+                            raise e
         return True
 
     def get_schema(self, local_path):
@@ -265,7 +275,7 @@ class FuploadHelper(object):
             if os.path.isdir(sub_path):
                 sub_res = os.listdir(sub_path)
                 if 'schema.info' not in sub_res:
-                    break
+                    continue
                 else:
                     bag = {}
                     separator, null_holder, schema = self.get_schema(sub_path)
