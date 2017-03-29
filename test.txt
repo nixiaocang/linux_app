@@ -1,6 +1,4 @@
 domain=haizhi
 username=jiaoguofu
 password=jiao1993
-path=/home/jiaogf/tfs
-ds_name=fsplit
-tbname=ta
+path=/Users/jiaoguofu/Desktop/local
