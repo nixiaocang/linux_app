@@ -1,4 +1,0 @@
-domain=haizhi
-username=jiaoguofu
-password=jiao1993
-path=/Users/jiaoguofu/Desktop/local
