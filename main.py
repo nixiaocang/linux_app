@@ -3,7 +3,7 @@
 
 import sys
 from  bdp_batch_up import FuploadHelper
-from bdp_batch_up_sftp import FuploadHelper2
+from bdp_batch_up_2 import FuploadHelper2
 
 if __name__=='__main__':
     print """

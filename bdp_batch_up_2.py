@@ -309,18 +309,3 @@ class FuploadHelper2(object):
             self.do_action(bag['ds_id'], bag['tb_id'], bag['schema'], bag['separator'], bag['null_holder'], sub_path, bag['err'])
         return True
 
-if __name__=='__main__':
-    domain = "haizhi"
-    username = "jiaoguofu"
-    password = "jiao1993"
-    local_path = "/Users/jiaoguofu/Desktop/fsplit_bak/tb"
-    ds_name = "fsplit_bak"
-    tbname = "tb"
-    import datetime
-    print datetime.datetime.today()
-    #FuploadHelper(domain, username, password).create(local_path)
-    FuploadHelper(domain, username, password).append(local_path, ds_name, tbname)
-    #FuploadHelper(domain, username, password).retry(local_path)
-    print datetime.datetime.today()
-
-
