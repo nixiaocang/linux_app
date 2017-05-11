@@ -101,7 +101,7 @@ class FuploadHelper2(object):
 
             # 第四步 多线程实现文件上传
             # 创建文件夹
-            for i in range(5):
+            for i in range(10):
                 th = threading.Thread(target=self.send_file, args=(queue, remotepath))
                 thread.append(th)
             for t in thread:
@@ -109,7 +109,7 @@ class FuploadHelper2(object):
                 t.start()
             for t in thread:
                 t.join()
-            print '发送完毕 进行校验'
+            print '发送完毕 进行校验:%s' % time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
             cres =  self.check(ds_id, tb_id)
             if cres:
                 error_bag = {
@@ -173,18 +173,19 @@ class FuploadHelper2(object):
                 res.remove('all.zip')
                 os.remove(zipname)
             # 压缩该文件下所有需要上传的文件
-            f = zipfile.ZipFile(zipname,'w',zipfile.ZIP_DEFLATED)
+	    print "开始压缩:%s" % time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+            f = zipfile.ZipFile(zipname,'w',zipfile.ZIP_DEFLATED, allowZip64 = True)
             for fname in res:
                 fromfile = os.path.join(sub_path, fname)
                 if os.path.isdir(fromfile):
                     continue
                 f.write(fromfile)
             f.close()
+	    print "压缩完成:%s" % time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
         size = os.path.getsize(zipname)
         total = int(math.ceil(float(size)/self.chunksize))
         self.total = total
-        md5sum = os.popen('md5 %s' % zipname).read()
-        md5 = md5sum.split('= ')[1].split('\n')[0]
+        md5 = ""
         partnum = 0
         if err is None:
             err = [i+1  for i in range(total)]
@@ -233,6 +234,7 @@ class FuploadHelper2(object):
                 info['path'] = remotepath
                 info['das'] = open(info['das']).read()
                 res = requests.post(ezio_upload, data=info)
+		print "%s 发送完成:%s" % (time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())), info.get('partnum'))
         return True
 
     def get_schema(self, local_path):
